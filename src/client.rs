@@ -4,11 +4,12 @@ use async_tungstenite::{
     WebSocketStream,
 };
 use futures::prelude::*;
-use uuid::Uuid;
 use serde_json::{json, Value};
+use uuid::Uuid;
 
 pub struct Client {
     ws_stream: WebSocketStream<ConnectStream>,
+    packets: Vec<Value>,
 }
 
 impl Client {
@@ -17,7 +18,12 @@ impl Client {
 
         Ok(Client {
             ws_stream: ws_stream,
+            packets: Vec::new(),
         })
+    }
+
+    pub fn _quit(&mut self) {
+        println!("Quit!");
     }
 
     fn get_uuid() -> String {
@@ -35,8 +41,7 @@ impl Client {
             "travellerEmail": "visual.studio.growtopia@gmail.com",
             "travellerPassword": "1234567890"
         });
-        let res = Self::send(self, payload_json).await?;
-        println!("{}", res);
+        Self::send(self, payload_json).await?;
 
         Ok(())
     }
@@ -45,22 +50,35 @@ impl Client {
         let payload_json = json!({
             "event": "logoutTraveller",
         });
-        let res = Self::send(self, payload_json).await?;
-        println!("{}", res);
+        Self::send(self, payload_json).await?;
 
         Ok(())
     }
 
-    pub async fn send(&mut self, mut data: Value) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn listen(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        while let Some(msg) = self.ws_stream.next().await {
+            let msg_json: Value = serde_json::from_str(msg?.into_text()?.as_str())?;
+            let current_ref = msg_json["ref"].as_str();
+            self.packets.retain(|packet| {
+                if packet["ref"].as_str() == current_ref {
+                    return false;
+                }
+                true
+            });
+            println!("received: {}", msg_json["ref"]);
+            if self.packets.len() == 0 {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn send(&mut self, mut data: Value) -> Result<(), Box<dyn std::error::Error>> {
         data["ref"] = json!(Self::get_uuid());
         self.ws_stream.send(Message::text(data.to_string())).await?;
+        self.packets.push(data);
 
-        let msg = self
-            .ws_stream
-            .next()
-            .await
-            .ok_or("didn't receive anything")??;
-        // Maybe there is a better way to do this line under
-        Ok(msg.into_text().unwrap())
+        Ok(())
     }
 }
