@@ -11,16 +11,23 @@ use std::time::Instant;
 // Add concurrency, https://tokio.rs/tokio/tutorial/spawning
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let now = Instant::now();
-
     let mut client = Client::new("wss://towerverse.herokuapp.com".into()).await?;
+    //let mut client = Client::new("ws://localhost:5000".into()).await?;
 
-    client.hello().await?;
-    client.hello2().await?;
 
-    client.listen().await?;
+    let handle = tokio::spawn(async move {
+        let now = Instant::now();
+        client.hello().await.unwrap();
+        client.hello2().await.unwrap();
+        client.listen().await.unwrap();
+        println!("elapsed: {} ms", now.elapsed().as_millis());
+    });
 
-    println!("elapsed: {}ms", now.elapsed().as_millis());
+    handle.await.unwrap();
+
+    //client.hello().await.unwrap();
+    //client.hello2().await.unwrap();
+    //client.listen().await.unwrap();
 
     Ok(())
 }

@@ -6,6 +6,7 @@ use async_tungstenite::{
 use futures::prelude::*;
 use serde_json::{json, Value};
 use uuid::Uuid;
+//use std::time::Instant;
 
 pub struct Client {
     ws_stream: WebSocketStream<ConnectStream>,
@@ -56,6 +57,7 @@ impl Client {
     }
 
     pub async fn listen(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        //let now = Instant::now();
         while let Some(msg) = self.ws_stream.next().await {
             let msg_json: Value = serde_json::from_str(msg?.into_text()?.as_str())?;
             let current_ref = msg_json["ref"].as_str();
@@ -70,6 +72,9 @@ impl Client {
                 break;
             }
         }
+        self.ws_stream.close(None).await?;
+
+        //println!("elapsed: {}ms", now.elapsed().as_millis());
 
         Ok(())
     }
