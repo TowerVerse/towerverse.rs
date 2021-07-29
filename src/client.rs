@@ -6,11 +6,9 @@ use async_tungstenite::{
 use futures::prelude::*;
 use serde_json::{json, Value};
 use uuid::Uuid;
-//use std::time::Instant;
 
 pub struct Client {
     ws_stream: WebSocketStream<ConnectStream>,
-    packets: Vec<Value>,
 }
 
 impl Client {
@@ -19,16 +17,27 @@ impl Client {
 
         Ok(Client {
             ws_stream: ws_stream,
-            packets: Vec::new(),
         })
-    }
-
-    pub fn _quit(&mut self) {
-        println!("Quit!");
     }
 
     fn get_uuid() -> String {
         Uuid::new_v4().to_hyphenated().to_string()
+    }
+
+    pub async fn login_traveller(
+        &mut self,
+        email: String,
+        password: String,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let payload_json = json!({
+            "event": "loginTraveller",
+            "travellerEmail": email,
+            "travellerPassword": password
+        });
+        let msg = Self::send(self, payload_json).await?;
+        println!("{}", msg["event"].as_str().unwrap());
+
+        Ok(())
     }
 
     pub async fn hello(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -38,52 +47,23 @@ impl Client {
         //email: "".into(),
         //};
         let payload_json = json!({
-            "event": "loginTraveller",
-            "travellerEmail": "visual.studio.growtopia@gmail.com",
-            "travellerPassword": "1234567890"
+            "event": "logoutTraveller"
         });
-        Self::send(self, payload_json).await?;
+        let msg = Self::send(self, payload_json).await?;
+        println!("{}", msg["event"].as_str().unwrap());
 
         Ok(())
     }
 
-    pub async fn hello2(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let payload_json = json!({
-            "event": "logoutTraveller",
-        });
-        Self::send(self, payload_json).await?;
-
-        Ok(())
-    }
-
-    pub async fn listen(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        //let now = Instant::now();
-        while let Some(msg) = self.ws_stream.next().await {
-            let msg_json: Value = serde_json::from_str(msg?.into_text()?.as_str())?;
-            let current_ref = msg_json["ref"].as_str();
-            self.packets.retain(|packet| {
-                if packet["ref"].as_str() == current_ref {
-                    return false;
-                }
-                true
-            });
-            println!("received: {}", msg_json["ref"]);
-            if self.packets.len() == 0 {
-                break;
-            }
-        }
-        self.ws_stream.close(None).await?;
-
-        //println!("elapsed: {}ms", now.elapsed().as_millis());
-
-        Ok(())
-    }
-
-    pub async fn send(&mut self, mut data: Value) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn send(&mut self, mut data: Value) -> Result<Value, Box<dyn std::error::Error>> {
         data["ref"] = json!(Self::get_uuid());
         self.ws_stream.send(Message::text(data.to_string())).await?;
-        self.packets.push(data);
+        let msg = self
+            .ws_stream
+            .next()
+            .await
+            .ok_or("didn't receive anything")??;
 
-        Ok(())
+        Ok(serde_json::from_str(msg.to_text()?)?)
     }
 }

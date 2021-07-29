@@ -1,6 +1,8 @@
 use crate::client::Client;
+use serde::{Deserialize, Serialize};
 
-pub struct _Traveller {
+#[derive(Serialize, Deserialize)]
+pub struct Traveller {
     pub client: Client,
     pub id: String,
     pub name: String,
